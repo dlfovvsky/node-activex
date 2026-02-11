@@ -472,39 +472,8 @@ Local<Object> DispObject::NodeCreate(Isolate *isolate, const Local<Object> &pare
 
 void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
     Isolate *isolate = args.GetIsolate();
-    Local<Context> ctx = isolate->GetCurrentContext();
-    bool isGetObject = false;
-    bool isGetAccessibleObject = false;
-    int argcnt = args.Length();
-    if (argcnt < 1) {
-        isolate->ThrowException(InvalidArgumentsError(isolate));
-        return;
-    }
-    int options = (option_async | option_type);
-    if (argcnt > 1) {
-        Local<Value> val, argopt = args[1];
-        bool isEmpty = argopt.IsEmpty();
-        bool isObject = argopt->IsObject();
-        if (!isEmpty && isObject) {
-            auto opt = Local<Object>::Cast(argopt);
-            if (opt->Get(ctx, v8str(isolate, "async")).ToLocal(&val)) {
-                if (!v8val2bool(isolate, val, true)) options &= ~option_async;
-            }
-            if (opt->Get(ctx, v8str(isolate, "type")).ToLocal(&val)) {
-                if (!v8val2bool(isolate, val, true)) options &= ~option_type;
-            }
-            if (opt->Get(ctx, v8str(isolate, "activate")).ToLocal(&val)) {
-                if (v8val2bool(isolate, val, false)) options |= option_activate;
-            }
-            if (opt->Get(ctx, v8str(isolate, "getobject")).ToLocal(&val)) {
-                if (v8val2bool(isolate, val, false)) isGetObject = true;
-            }
-            if (opt->Get(ctx, v8str(isolate, "getaccessibleobject")).ToLocal(&val)) {
-                if (v8val2bool(isolate, val, false)) isGetAccessibleObject = true;
-            }
-        }
-    }
-   
+    Local<Context> context = isolate->GetCurrentContext();
+
     // Invoked as plain function
     if (!args.IsConstructCall()) {
         Local<FunctionTemplate> clazz = clazz_template.Get(isolate);
@@ -512,17 +481,56 @@ void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
             isolate->ThrowException(TypeError(isolate, "FunctionTemplateIsEmpty"));
             return;
         }
-        const int argc = 1;
-        Local<Value> argv[argc] = { args[0] };
+
+        int argc = args.Length();
+        std::vector<Local<Value>> argv(argc);
+        for (int i = 0; i < argc; ++i) {
+            argv[i] = args[i];
+        }
+
         Local<Function> cons;
-        Local<Context> context = isolate->GetCurrentContext();
         if (clazz->GetFunction(context).ToLocal(&cons)) {
             Local<Object> self;
-            if (cons->NewInstance(context, argc, argv).ToLocal(&self)) {
+            if (cons->NewInstance(context, argc, argv.data()).ToLocal(&self)) {
                 args.GetReturnValue().Set(self);
             }
         }
         return;
+    }
+
+    // Check argument count
+    int argcnt = args.Length();
+    if (argcnt < 1) {
+        isolate->ThrowException(InvalidArgumentsError(isolate));
+        return;
+    }
+
+    // Process optional arguments
+    bool isGetObject = false;
+    bool isGetAccessibleObject = false;
+    int options = (option_async | option_type);
+    if (argcnt > 1) {
+        Local<Value> val, argopt = args[1];
+        bool isEmpty = argopt.IsEmpty();
+        bool isObject = argopt->IsObject();
+        if (!isEmpty && isObject) {
+            auto opt = Local<Object>::Cast(argopt);
+            if (opt->Get(context, v8str(isolate, "async")).ToLocal(&val)) {
+                if (!v8val2bool(isolate, val, true)) options &= ~option_async;
+            }
+            if (opt->Get(context, v8str(isolate, "type")).ToLocal(&val)) {
+                if (!v8val2bool(isolate, val, true)) options &= ~option_type;
+            }
+            if (opt->Get(context, v8str(isolate, "activate")).ToLocal(&val)) {
+                if (v8val2bool(isolate, val, false)) options |= option_activate;
+            }
+            if (opt->Get(context, v8str(isolate, "getobject")).ToLocal(&val)) {
+                if (v8val2bool(isolate, val, false)) isGetObject = true;
+            }
+            if (opt->Get(context, v8str(isolate, "getaccessibleobject")).ToLocal(&val)) {
+                if (v8val2bool(isolate, val, false)) isGetAccessibleObject = true;
+            }
+        }
     }
 
     // Create dispatch object from ProgId
